@@ -1,12 +1,12 @@
 # Game tracker: notes for Claude sessions
 
+**Read the house rules first:** [HOUSE-RULES.md](https://github.com/jcm-book-library/control-room/blob/main/HOUSE-RULES.md) in `control-room` (plain text: https://raw.githubusercontent.com/jcm-book-library/control-room/main/HOUSE-RULES.md). They cover Google Sheet safety, branches and pull requests into `main`, using cheaper models to save usage credits, and the build template. The notes below are this repo's own; where they are more specific, they win. The project charter is `project.json`.
+
 Sister app to the book tracker "Jackets & Manuscripts" (reference: `jcm-book-library/my-book-library`,
 branch `claude/keen-sagan-yf9rqf`, `v3/reading-log.html`). Copy its patterns, styles and helper code.
 
 ## Way of working
-- **Orchestrate with other models to make best use of usage credits.** Keep app design and core code
-  in the main session; hand mechanical work to cheaper subagents (Haiku for lookups and data
-  gathering, Sonnet for Playwright test runs, read-back comparisons, and routine edits).
+- Model use: see "Using models" in the house rules.
 - Build in stages; test headless with Playwright (Chromium at `/opt/pw-browsers/chromium`, stubbed
   `window.claude`) at laptop and phone width before every publish; commit and push each stage.
 - Owner likes options with a recommendation, bullet points first, and pushback.
