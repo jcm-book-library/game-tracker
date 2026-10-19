@@ -13,6 +13,22 @@ Sister app to the book tracker *Jackets & Manuscripts*. One self-contained page,
 - Plan: status **Next Up** = Up next (the app keeps Status and Tier in step); Soon / Someday live in Tier for Playlist games.
 - Finished = Played (end of story, not 100%). Completion rate = Played ÷ (Played + DNF).
 
+## Stages
+
+1. **Log and Library** (19 Oct 2026). Playing now with hours vs time to beat, quick log, play timer, backdating, finish / pause / drop with a rating out of 10; recent sessions with edit and delete; Up next and Coming soon; time played per day. Library with search, filters, status chips, sorting, detail rows and an add/edit dialog.
+2. Plan: Up next (ordered, with a why), Soon, the backlog in sheet order, sort deck.
+3. Dashboard: tiles, monthly hours, calendar heatmap, ratings, genres, platform split, completion rate, studios, drill-down.
+4. Tools: lucky dip, Do I own this?, stalled games, goal planner, year in review, recommendations, my time vs time to beat.
+5. Discover: on this day, moment of the day, release countdown.
+
+## How the app writes to the sheet
+
+- Logging a session appends one row to `🎮 Play Log`, then finds the game's row by `id`, re-reads its `Hours` cell and adds the session to it (and sets `Started` if it was blank).
+- Editing a session checks that row still matches before writing; deleting sets minutes to 0 and source to `deleted` (rows are never removed). Hours are adjusted by the difference.
+- The edit dialog writes only the cells that changed. Text is written with a leading `'`, numbers as numbers, dates as yyyy-mm-dd (the sheet shows them as `19 Nov 26`).
+- Status **Next Up** and Tier **Up next** are kept in step; Up Next Order is renumbered 1..n, writing only the numbers that changed.
+- Adding a game appends one row with the next id (highest + 1) and today's date in `Added`.
+
 ## Sheet changes log
 
 ### 2026-10-18
