@@ -1,0 +1,12 @@
+{
+  "name": "Game Tracker",
+  "repo": "game-tracker",
+  "purpose": "Logs gaming and keeps a library of games, backed by the Entertainment Tracker Google Sheet.",
+  "family": "Entertainment",
+  "stage": "Planning",
+  "live": null,
+  "tags": [
+    "media-tracker"
+  ],
+  "updated": "2026-10-19"
+}
