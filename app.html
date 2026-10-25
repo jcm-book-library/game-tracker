@@ -421,6 +421,12 @@ dialog::backdrop{background:rgba(8,6,14,.65)}
 .snap{font-size:12px;color:var(--muted);margin:0 0 10px}
 .mini-list.up-mini li{display:grid;grid-template-columns:auto minmax(0,1fr);justify-content:start;gap:0 10px}
 .mini-list.up-mini .why{grid-column:2}
+/* hidden always wins, on GitHub Pages too (claude.ai adds this rule itself) */
+[hidden]{display:none!important}
+.sheet-list li{grid-template-columns:minmax(0,1fr) auto}
+.sheet-list li .n{display:none}
+.sheet-list .why{grid-column:1/-1}
+@media (max-width:560px){.sheet-list li{grid-template-columns:minmax(0,1fr)}.sheet-list .acts{grid-column:1;justify-content:flex-start}}
 </style>
 
 <div class="wrap">
@@ -440,7 +446,6 @@ dialog::backdrop{background:rgba(8,6,14,.65)}
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" role="tab" id="tab-log" aria-selected="true" aria-controls="view-log" type="button">Log</button>
     <button class="tab" role="tab" id="tab-library" aria-selected="false" aria-controls="view-library" type="button">Library</button>
-    <button class="tab" role="tab" type="button" disabled>Plan<small>soon</small></button>
     <button class="tab" role="tab" type="button" disabled>Dashboard<small>soon</small></button>
     <button class="tab" role="tab" type="button" disabled>Tools<small>soon</small></button>
     <button class="tab" role="tab" type="button" disabled>Discover<small>soon</small></button>
@@ -492,7 +497,7 @@ dialog::backdrop{background:rgba(8,6,14,.65)}
 
   <div class="grid">
     <div>
-      <section class="panel" aria-labelledby="upH"><div class="panel-head"><h2 id="upH">Up next</h2><span class="muted small" id="upNote"></span></div><ol class="mini-list up-mini" id="upList"></ol></section>
+      <section class="panel" aria-labelledby="upH"><div class="panel-head"><h2 id="upH">Up next</h2><span class="muted small"><span id="upNote"></span> <button type="button" class="linkbtn" id="planLink">Plan</button></span></div><ol class="mini-list up-mini" id="upList"></ol></section>
       <section class="panel" aria-labelledby="csH"><div class="panel-head"><h2 id="csH">Coming soon</h2><span class="muted small">Release dates from your sheet</span></div><ul class="mini-list" id="soonList"></ul></section>
     </div>
     <div>
@@ -525,7 +530,24 @@ dialog::backdrop{background:rgba(8,6,14,.65)}
       <select id="libPurchase" aria-label="Purchase"><option value="">Any purchase</option></select>
       <button class="btn btn-primary" id="addGameBtn" type="button">Add game</button>
     </div>
+    <div class="lib-mode" role="group" aria-label="Library view"><button type="button" data-mode="games" aria-pressed="true">Games</button><button type="button" data-mode="plan" aria-pressed="false">Plan your backlog</button></div>
     <div class="chips" id="libChips" role="group" aria-label="Status"></div>
+    <div id="planView" hidden>
+      <section class="panel" aria-labelledby="planUpH"><div class="panel-head"><h2 id="planUpH">Up next</h2><span class="muted small tnum" id="planUpNote"></span></div>
+        <p class="muted small" style="margin:-4px 0 10px">In the sheet these are the games with status Next Up. Taking one off sets it back to Playlist.</p>
+        <ol class="plan-list up-detail" id="planUpList"></ol></section>
+      <section class="panel deck" aria-labelledby="deckH" id="deckPanel">
+        <div class="panel-head"><h2 id="deckH">Sort deck</h2><span class="muted small tnum" id="deckNote"></span></div>
+        <div id="deckBody"></div>
+      </section>
+      <section class="panel" aria-labelledby="planSoonH"><div class="panel-head"><h2 id="planSoonH">Soon</h2><span class="muted small tnum" id="planSoonNote"></span></div><ol class="plan-list" id="planSoonList"></ol></section>
+      <section class="panel" aria-labelledby="sheetH">
+        <div class="panel-head"><h2 id="sheetH">Your backlog, in sheet order</h2><span class="muted small tnum" id="sheetNote"></span></div>
+        <p class="muted small" style="margin:-4px 0 10px">Playlist, Replay and Paused games. The search and filters above apply here. Games you put in Someday are dimmed and come back to the sort deck after a year. Coming Soon and In Development games wait on the Log until they're out.</p>
+        <ol class="plan-list sheet-list" id="sheetList"></ol>
+        <button class="btn" type="button" id="sheetMore" hidden>Show 50 more</button>
+      </section>
+    </div>
     <div class="table-wrap">
       <table class="lib">
         <thead><tr id="libHead"></tr></thead>
@@ -1130,9 +1152,9 @@ function planSync(g, ch) {
   return ch;
 }
 // Keep Up next numbered 1..n, writing only the games whose number changed
-async function renumberUpNext() {
-  const list = upNext();
-  for (let i = 0; i < list.length; i++) if (toNum(list[i].upNextOrder) !== i + 1) await writeGameFields(list[i].id, { upNextOrder: String(i + 1) });
+function renumberUpNext() {
+  upNext().forEach((g, i) => { if (g.id && toNum(g.upNextOrder) !== i + 1) savePlan(g, { upNextOrder: String(i + 1) }); });
+  return planQ.chain;
 }
 
 /* ---------- 🎮 Play Log writes ---------- */
@@ -1271,10 +1293,15 @@ function fillSelect(id, field, label, base) {
   sel.value = cur;
 }
 function renderLibrary() {
-  const L = state.lib;
+  const L = state.lib, plan = L.mode === 'plan';
   fillSelect('libPlatform', 'platform', 'All platforms', PLATFORMS);
   fillSelect('libGenre', 'genre', 'All genres', GENRES);
   fillSelect('libPurchase', 'purchase', 'Any purchase', PURCHASES);
+  document.querySelectorAll('.lib-mode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === (plan ? 'plan' : 'games'))));
+  $('planView').hidden = !plan; $('libChips').hidden = plan;
+  document.querySelector('#view-library .table-wrap').hidden = plan;
+  document.querySelector('#view-library .lib-foot').hidden = plan;
+  if (plan) { renderPlan(); return; }
   const counts = { All: state.games.length };
   for (const g of state.games) counts[g.status] = (counts[g.status] || 0) + 1;
   const sts = ['All', ...STATUSES, ...Object.keys(counts).filter(s => s !== 'All' && !STATUSES.includes(s))];
@@ -1322,6 +1349,186 @@ function detailRow(g) {
   tr.appendChild(td);
   return tr;
 }
+
+/* ---------- Plan ---------- */
+// The backlog: games you could start now. Coming Soon and In Development wait on the Log until they're out.
+const POOL = ['Next Up', 'Playlist', 'Replay', 'Paused'];
+const backlog = () => state.games.filter(g => g.id && POOL.includes(g.status));
+const soonPlan = () => backlog().filter(g => g.status !== 'Next Up' && g.tier === 'Soon');
+const stale = g => g.tier === 'Someday' && (!parseDate(g.triaged) || daysBetween(parseDate(g.triaged), today()) >= 365);
+
+// Plan writes go through a queue so taps feel instant; each one finds the row by id before writing
+const planQ = { chain: Promise.resolve(), pending: 0 };
+function savePlan(g, fields) {
+  const prev = Object.fromEntries(Object.keys(fields).map(k => [k, g[k]]));
+  Object.assign(g, Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, String(v ?? '')])));
+  planQ.pending++; planStatus();
+  planQ.chain = planQ.chain.then(() => writeGameFields(g.id, fields)).catch(err => {
+    Object.assign(g, prev);
+    notice(`Couldn't save the plan change for “${g.title}”: ${err.message || explain(err)}`, 'error');
+    renderPlanViews();
+  }).finally(() => { planQ.pending--; planStatus(); });
+  return planQ.chain;
+}
+function planStatus() { setStatus('live', planQ.pending ? `Saving plan… (${planQ.pending})` : 'Plan saved'); }
+function renderPlanViews() { renderUpNext(); renderPicker(); if (!$('view-library').hidden) renderLibrary(); }
+function setTier(g, tier) {
+  if (!isLive()) { notice('Planning needs the live connection. ' + connectHint(), 'error'); return; }
+  if ((g.tier || '') === tier && !(tier === 'Someday' && stale(g))) return;
+  savePlan(g, planSync(g, { tier }));
+  renumberUpNext();
+  renderPlanViews();
+}
+function moveUp(g, dir) {
+  const list = upNext(), i = list.indexOf(g), j = i + dir;
+  if (j < 0 || j >= list.length || !isLive()) return;
+  savePlan(list[j], { upNextOrder: String(i + 1) }); savePlan(g, { upNextOrder: String(j + 1) });
+  renderPlanViews();
+}
+
+const planUI = { limit: 50, whyOpen: null, deckDone: 0, deckSkipped: new Set() };
+const planMeta = g => [g.platform, g.purchase, g.genre, toNum(g.ttb) ? `about ${fmtH(g.ttb)} to beat` : '',
+  g.status === 'Replay' ? 'Replay' + (toNum(g.rating) ? ` · you rated it ${g.rating}/10` : '') : '', g.status === 'Paused' ? 'Paused' + (toNum(g.hours) ? ` at ${fmtH(g.hours)}` : '') : ''].filter(Boolean).join(' · ');
+function planRow(g, { num, kind }) {
+  const li = document.createElement('li');
+  li.dataset.id = g.id;
+  if (kind === 'sheet' && g.tier === 'Someday') li.className = 'someday';
+  li.innerHTML = `<span class="n tnum">${num ?? ''}</span><span><span class="t"></span><br><span class="m"></span></span><span class="acts"></span><span class="why"></span>`;
+  li.querySelector('.t').textContent = g.title;
+  li.querySelector('.m').textContent = planMeta(g) + (kind === 'sheet' && g.tier === 'Someday' ? ' · Someday' : '');
+  li.querySelector('.why').textContent = g.why ? '“' + g.why + '”' : '';
+  if ((kind === 'up' || kind === 'soon') && g.notes) { const d = document.createElement('p'); d.className = 'desc'; d.textContent = g.notes; li.appendChild(d); }
+  const acts = li.querySelector('.acts');
+  const btn = (label, fn, opts = {}) => { const x = document.createElement('button'); x.type = 'button'; x.textContent = label; if (opts.aria) x.setAttribute('aria-label', opts.aria + ' ' + g.title); if (opts.disabled) x.disabled = true; x.addEventListener('click', fn); acts.appendChild(x); };
+  const whyBtn = () => btn('Why', () => { planUI.whyOpen = planUI.whyOpen === g.id ? null : g.id; renderPlan(); }, { aria: 'Edit why for' });
+  if (kind === 'up') {
+    btn('↑', () => moveUp(g, -1), { aria: 'Move up', disabled: num === 1 });
+    btn('↓', () => moveUp(g, 1), { aria: 'Move down', disabled: num === upNext().length });
+    whyBtn();
+    btn('Soon', () => setTier(g, 'Soon'), { aria: 'Move to Soon:' });
+  } else if (kind === 'soon') {
+    btn('Up next', () => setTier(g, 'Up next'), { aria: 'Move to Up next:' });
+    whyBtn();
+    btn('Someday', () => setTier(g, 'Someday'), { aria: 'Move to Someday:' });
+  } else {
+    btn('Up next', () => setTier(g, 'Up next'), { aria: 'Add to Up next:' });
+    btn('Soon', () => setTier(g, 'Soon'), { aria: 'Add to Soon:' });
+  }
+  if (planUI.whyOpen === g.id) {
+    const w = document.createElement('div'); w.className = 'whyedit';
+    w.innerHTML = '<input type="text" maxlength="200" aria-label="Why it\'s on the list" placeholder="Why it\'s on the list"><button class="btn btn-primary" type="button">Save</button>';
+    const inp = w.querySelector('input'); inp.value = g.why || '';
+    const save = () => { const v = inp.value.trim(); planUI.whyOpen = null; if (v !== (g.why || '') && isLive()) savePlan(g, { why: v }); renderPlanViews(); };
+    w.querySelector('button').addEventListener('click', save);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { planUI.whyOpen = null; renderPlan(); } });
+    li.appendChild(w);
+    setTimeout(() => inp.focus());
+  }
+  return li;
+}
+function renderPlan() {
+  const ups = upNext().filter(g => g.id), soon = soonPlan();
+  $('planUpNote').textContent = ups.length > 10 ? `${ups.length} games · about 10 works best` : `${ups.length} of 10`;
+  $('planSoonNote').textContent = `${soon.length} game${soon.length === 1 ? '' : 's'}`;
+  const fill = (el, list, kind, empty) => {
+    el.textContent = '';
+    if (!list.length) { el.innerHTML = `<li class="empty muted">${empty}</li>`; return; }
+    list.forEach((g, i) => el.appendChild(planRow(g, { num: kind === 'up' ? i + 1 : '', kind })));
+  };
+  fill($('planUpList'), ups, 'up', 'Pick up to 10 games from Soon, the sort deck or your backlog below.');
+  fill($('planSoonList'), soon, 'soon', 'Nothing here yet.');
+  const L = state.lib, q = L.q.toLowerCase(), all = backlog();
+  const rest = all.filter(g => g.status !== 'Next Up' && g.tier !== 'Soon').filter(g =>
+    (!L.platform || g.platform === L.platform) && (!L.genre || g.genre === L.genre) && (!L.purchase || g.purchase === L.purchase) &&
+    (!q || [g.title, g.studio, g.cast, g.genre, g.notes, g.platform].some(v => String(v || '').toLowerCase().includes(q))));
+  $('sheetNote').textContent = `${fmt(rest.length)} game${rest.length === 1 ? '' : 's'}`;
+  const sl = $('sheetList'); sl.textContent = '';
+  for (const g of rest.slice(0, planUI.limit)) sl.appendChild(planRow(g, { kind: 'sheet' }));
+  if (!rest.length) sl.innerHTML = '<li class="empty muted">No backlog games match the search and filters.</li>';
+  $('sheetMore').hidden = rest.length <= planUI.limit;
+  renderDeck(all);
+}
+
+/* Taste profile from your ratings: genres, studios and series you rate above your own average */
+// "Gran Turismo 3: A-Spec" and "Gran Turismo 7" share the series key "gran turismo"
+function seriesKey(title) {
+  let t = String(title || '').toLowerCase().split(':')[0].replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').trim();
+  t = t.replace(/^(the|marvels|lego|tom clancys)\s+/, '').replace(/\s+(remastered|trilogy|legendary edition|collection|remake)$/, '');
+  t = t.replace(/\s+(\d+|[ivx]+|part [ivx\d]+)$/, '').trim();
+  return t.split(/\s+/).slice(0, 2).join(' ');
+}
+function buildProfile() {
+  const rated = state.games.filter(g => ['Played', 'DNF', 'Replay'].includes(g.status) && (toNum(g.rating) || g.status === 'DNF'));
+  const ratingOf = g => g.status === 'DNF' && !toNum(g.rating) ? 3 : toNum(g.rating);
+  const avg = rated.reduce((a, g) => a + ratingOf(g), 0) / (rated.length || 1);
+  const genre = new Map(), studio = new Map();
+  const add = (m, k, g) => { if (!k) return; const x = m.get(k) || { d: 0, n: 0, sum: 0 }; x.d += ratingOf(g) - avg; x.sum += ratingOf(g); x.n++; m.set(k, x); };
+  for (const g of rated) { add(genre, g.genre, g); add(studio, g.studio, g); }
+  const shrink = (m, k, s) => { const x = m.get(k); return x ? x.d / (x.n + s) : 0; };
+  // Consoles you're using now: whatever you're playing or have lined up
+  const current = new Set(state.games.filter(g => g.status === 'Playing' || g.status === 'Next Up').map(g => g.platform).filter(Boolean));
+  return { avg, genreScore: k => shrink(genre, k, 3), studioScore: k => shrink(studio, k, 1), studioN: k => (studio.get(k) || { n: 0 }).n, current };
+}
+const OLD_PLATFORMS = ['PS', 'PS2', 'PS3', 'N64'];
+function scoreGame(g, P) {
+  const why = []; let s = 0;
+  // Other games in the same series you've played (not this one, so a Replay doesn't count itself)
+  const key = seriesKey(g.title);
+  const others = key ? state.games.filter(x => x !== g && seriesKey(x.title) === key && ['Played', 'DNF', 'Replay'].includes(x.status) && toNum(x.rating)) : [];
+  if (others.length) {
+    const r = others.reduce((a, x) => a + toNum(x.rating), 0) / others.length, w = 1 + (r - P.avg) * 0.8;
+    s += w; why.push({ t: `You've played ${others.length} in this series · average ${Math.round(r * 10) / 10}/10`, w: Math.abs(w) + 1 });
+  }
+  const gs = P.genreScore(g.genre); s += gs * 1.6;
+  if (gs > 0.15) why.push({ t: `${g.genre} rates above your average`, w: gs * 1.6 });
+  const ss = P.studioScore(g.studio); s += ss * 2;
+  if (P.studioN(g.studio) && ss > 0) why.push({ t: `${g.studio}: you've played ${P.studioN(g.studio)}`, w: ss * 2 });
+  if (['Owned', 'Digital'].includes(g.purchase)) { s += 0.7; why.push({ t: 'You own it', w: 0.7 }); }
+  else if (g.purchase === 'Subscription') { s += 0.6; why.push({ t: 'On your subscription', w: 0.6 }); }
+  else if (g.purchase === 'To Purchase') s -= 0.4;
+  if (g.platform && P.current.has(g.platform)) { s += 0.4; why.push({ t: `On ${g.platform}, which you're playing now`, w: 0.4 }); }
+  else if (OLD_PLATFORMS.includes(g.platform)) s -= 0.3;
+  const ttb = toNum(g.ttb);
+  if (ttb && ttb <= 12) { s += 0.3; why.push({ t: `Short: about ${fmtH(ttb)}`, w: 0.3 }); }
+  if (g.status === 'Replay' && toNum(g.rating)) { const w = (toNum(g.rating) - P.avg) * 0.5; s += w; if (w > 0) why.push({ t: `You rated it ${g.rating}/10`, w }); }
+  if (g.status === 'Paused') { s += 0.4; why.push({ t: 'You paused it part way', w: 0.4 }); }
+  if (+yearOf(g.released) >= new Date().getFullYear() - 2) { s += 0.3; why.push({ t: 'Recent release', w: 0.3 }); }
+  return { g, s, why: why.sort((a, c) => c.w - a.w).slice(0, 3).map(x => x.t) };
+}
+
+// Sort deck: unsorted backlog games (and Someday picks over a year old), most promising first
+function deckQueue(all) {
+  const P = buildProfile();
+  return (all || backlog()).filter(g => g.status !== 'Next Up' && (!g.tier || stale(g)) && !planUI.deckSkipped.has(g.id))
+    .map(g => scoreGame(g, P)).sort((a, b) => b.s - a.s);
+}
+function renderDeck(all) {
+  const q = deckQueue(all), box = $('deckBody');
+  $('deckNote').textContent = `${fmt(q.length)} to sort${planUI.deckDone ? ` · ${planUI.deckDone} sorted this visit` : ''}`;
+  if (!q.length) { box.innerHTML = '<p class="empty">All sorted. Games you put in Someday come back here after a year.</p>'; return; }
+  const { g, why } = q[0];
+  box.innerHTML = `<div class="deck-card"><div><h3></h3><div class="m muted"></div><div class="chips"></div><p class="syn"></p></div>
+    <div class="deck-btns"><button class="btn btn-primary" type="button" data-t="Up next">Up next<kbd>1</kbd></button><button class="btn" type="button" data-t="Soon">Soon<kbd>2</kbd></button>
+    <button class="btn" type="button" data-t="Someday">Someday<kbd>3</kbd></button><button class="btn" type="button" data-t="">Skip<kbd>4</kbd></button></div></div>`;
+  box.querySelector('h3').textContent = g.title;
+  box.querySelector('.m').textContent = [planMeta(g), stale(g) ? 'Someday for over a year' : ''].filter(Boolean).join(' · ');
+  const ch = box.querySelector('.chips');
+  for (const t of why) { const c = document.createElement('span'); c.className = 'why-chip'; c.textContent = t; ch.appendChild(c); }
+  if (!why.length) ch.remove();
+  if (g.notes) box.querySelector('.syn').textContent = g.notes; else box.querySelector('.syn').remove();
+  box.querySelectorAll('.deck-btns button').forEach(x => x.addEventListener('click', () => deckPick(g, x.dataset.t)));
+}
+function deckPick(g, tier) {
+  if (tier) { if (!isLive()) { notice('Planning needs the live connection. ' + connectHint(), 'error'); return; } setTier(g, tier); planUI.deckDone++; renderPlan(); }
+  else { planUI.deckSkipped.add(g.id); renderDeck(); }
+}
+document.addEventListener('keydown', e => {
+  if ($('view-library').hidden || state.lib.mode !== 'plan' || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.querySelector('dialog[open]')) return;
+  const i = ['1', '2', '3', '4'].indexOf(e.key);
+  if (i < 0) return;
+  const b = document.querySelectorAll('#deckBody .deck-btns button')[i];
+  if (b) { e.preventDefault(); b.click(); }
+});
 
 /* ---------- edit / add dialog ---------- */
 const RATINGS = ['', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'];
@@ -1433,6 +1640,9 @@ $('libBody').addEventListener('click', e => {
   state.lib.open = state.lib.open === r ? null : r; renderLibrary();
 });
 $('libMore').addEventListener('click', () => { state.lib.limit += 100; renderLibrary(); });
+document.querySelector('.lib-mode').addEventListener('click', e => { const m = e.target.closest('button'); if (!m) return; state.lib.mode = m.dataset.mode; try { localStorage.setItem(TAB_KEY + '-mode', m.dataset.mode); } catch (er) {} renderLibrary(); });
+$('sheetMore').addEventListener('click', () => { planUI.limit += 50; renderPlan(); });
+$('planLink').addEventListener('click', () => { state.lib.mode = 'plan'; showTab('library'); });
 $('addGameBtn').addEventListener('click', () => { if (!isLive()) { notice('Adding a game needs the live connection. ' + connectHint(), 'error'); return; } openGameDialog(null); });
 $('gameForm').addEventListener('submit', saveGameDialog);
 $('dlgClose').addEventListener('click', () => $('gameDlg').close());
@@ -1522,7 +1732,7 @@ $('gForm').addEventListener('submit', e => {
 
 renderAll();
 drawTimer();
-try { if (localStorage.getItem(TAB_KEY) === 'library') showTab('library'); } catch (e) {}
+try { state.lib.mode = localStorage.getItem(TAB_KEY + '-mode') === 'plan' ? 'plan' : 'games'; if (localStorage.getItem(TAB_KEY) === 'library') showTab('library'); } catch (e) {}
 setStatus('loading', 'Connecting to your sheet…');
 (async () => {
   if (!(window.claude && window.claude.use)) { googleBoot(); return; }

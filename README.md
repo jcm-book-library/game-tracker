@@ -16,7 +16,7 @@ Sister app to the book tracker *Jackets & Manuscripts*. One self-contained page,
 ## Stages
 
 1. **Log and Library** (19 Oct 2026). Playing now with hours vs time to beat, quick log, play timer, backdating, finish / pause / drop with a rating out of 10; recent sessions with edit and delete; Up next and Coming soon; time played per day. Library with search, filters, status chips, sorting, detail rows and an add/edit dialog.
-2. Plan: Up next (ordered, with a why), Soon, the backlog in sheet order, sort deck.
+2. **Plan** (25 Oct 2026). In the Library, "Plan your backlog": Up next (about 10, ordered, with a why; these are the Next Up games), Soon, the backlog in sheet order (Playlist, Replay and Paused) with one-tap Up next / Soon, and a sort deck that shows the most promising unsorted games first (series you rate highly, genres and studios above your average, owned or on subscription, the console you're using, short games, paused games) and brings Someday back after a year.
 3. Dashboard: tiles, monthly hours, calendar heatmap, ratings, genres, platform split, completion rate, studios, drill-down.
 4. Tools: lucky dip, Do I own this?, stalled games, goal planner, year in review, recommendations, my time vs time to beat.
 5. Discover: on this day, moment of the day, release countdown.
